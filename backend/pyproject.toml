@@ -1,0 +1,76 @@
+[project]
+name = "content-remix-agent"
+version = "0.1.0"
+description = "AI-powered content remix assistant"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    # Web 框架
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "sse-starlette>=1.6.0",
+    # HTTP 客户端
+    "httpx>=0.24.0",
+    "python-multipart>=0.0.9",
+    # LLM & Agent
+    "langchain>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-ollama>=0.2.0",
+    "langchain-anthropic>=0.1.0",
+    "langchain-openai>=0.1.0",
+    "langchain-deepseek>=1.0.0",
+    "langgraph>=0.2.0",
+    # 配置
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    # 视频处理
+    "moviepy>=1.0.0",
+    # 日志
+    "loguru>=0.7.0",
+    # 数据库
+    "aiomysql>=0.2.0",
+    "greenlet>=3.0.0", # SQLAlchemy async 必需
+    "nest-asyncio>=1.6.0",
+    # ASR 语音转文字（SenseVoice - 阿里 FunASR）
+    "funasr>=1.1.3",
+    "modelscope>=1.9.0", # ModelScope SDK - 模型下载和管理
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    # 解决 Python 3.12 兼容性问题
+    "llvmlite>=0.42.0",
+    "numba>=0.59.0",
+    "pillow>=11.3.0",
+    # 用户认证
+    "bcrypt>=4.0.0",
+    "PyJWT>=2.8.0",
+    "email-validator>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ipython>=8.12.0",
+]
+postgres = [
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "psycopg[binary]>=3.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

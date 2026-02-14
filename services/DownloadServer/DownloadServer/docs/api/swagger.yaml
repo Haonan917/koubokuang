@@ -1,0 +1,382 @@
+openapi: 3.0.0
+info:
+  title: MediaCrawlerDowloader API接口文档
+  description: 用于下载媒体文件的API接口
+  version: 1.0.0
+
+paths:
+  /api/v1/creator_query:
+    post:
+      summary: 查询创作者主页信息
+      description: 根据提供的平台和创作者URL，获取创作者的详细信息
+      operationId: queryCreatorInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatorQueryRequest'
+      responses:
+        '200':
+          description: 成功响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/creator_contents:
+    post:
+      summary: 查询创作者内容列表
+      description: 根据创作者ID获取其发布的内容列表
+      operationId: queryCreatorContents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatorContentListRequest'
+      responses:
+        '200':
+          description: 成功响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatorContentListOkResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/content_detail:
+    post:
+      summary: 查询内容详情
+      description: 根据平台和内容URL获取内容的详细信息
+      operationId: queryContentDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentDetailRequest'
+      responses:
+        '200':
+          description: 成功响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentDetailOkResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    PlatformEnum:
+      type: string
+      enum:
+        - xhs
+        - dy
+        - ks
+        - bili
+      description: |
+        支持的平台类型:
+        * xhs - 小红书
+        * dy - 抖音
+        * ks - 快手
+        * bili - B站
+
+    CreatorQueryRequest:
+      type: object
+      required:
+        - platform
+        - creator_url
+        - cookies
+      properties:
+        platform:
+          $ref: '#/components/schemas/PlatformEnum'
+        creator_url:
+          type: string
+          description: 创作者主页链接
+        cookies:
+          type: string
+          description: 登录成功后的cookies
+        creator_id:
+          type: string
+          description: 创作者ID（可选）
+          nullable: true
+          default: ""
+
+    CreatorQueryResponse:
+      type: object
+      required:
+        - nickname
+      properties:
+        nickname:
+          type: string
+          description: 创作者昵称
+        avatar:
+          type: string
+          description: 头像URL
+          default: ""
+        description:
+          type: string
+          description: 个人简介
+          default: ""
+        user_id:
+          type: string
+          description: 用户ID
+          default: ""
+        follower_count:
+          type: string
+          description: 粉丝数
+          default: ""
+        following_count:
+          type: string
+          description: 关注数
+          default: ""
+        content_count:
+          type: string
+          description: 作品数
+          default: ""
+
+    OkResponse:
+      type: object
+      properties:
+        biz_code:
+          type: integer
+          description: 业务状态码
+          default: 0
+        msg:
+          type: string
+          description: 响应消息
+          default: "OK!"
+        isok:
+          type: boolean
+          description: 是否成功
+          default: true
+        data:
+          $ref: '#/components/schemas/CreatorQueryResponse'
+
+    ErrorResponse:
+      type: object
+      properties:
+        biz_code:
+          type: integer
+          description: ��误码
+        msg:
+          type: string
+          description: 错误信息
+        isok:
+          type: boolean
+          description: 是否成功
+          default: false
+        extra:
+          type: object
+          description: 额外信息
+          nullable: true
+
+    CreatorContentListRequest:
+      type: object
+      required:
+        - platform
+        - creator_id
+        - cookies
+      properties:
+        platform:
+          $ref: '#/components/schemas/PlatformEnum'
+        creator_id:
+          type: string
+          description: 创作者ID
+        cursor:
+          type: string
+          description: 分页查询游标
+          default: ""
+        cookies:
+          type: string
+          description: 登录成功后的cookies
+
+    ContentTypeEnum:
+      type: string
+      enum:
+        - video
+        - note
+      description: |
+        内容类型:
+        * video - 视频
+        * note - 笔记/图文
+
+    ContentContent:
+      type: object
+      required:
+        - id
+        - url
+        - title
+        - content_type
+        - cover_url
+        - video_download_url
+      properties:
+        id:
+          type: string
+          description: 内容ID
+        url:
+          type: string
+          description: 内容URL
+        title:
+          type: string
+          description: 内容标题
+        content_type:
+          $ref: '#/components/schemas/ContentTypeEnum'
+        cover_url:
+          type: string
+          description: 封面URL
+        image_urls:
+          type: array
+          items:
+            type: string
+          description: 图片URL列表
+          nullable: true
+        video_download_url:
+          type: string
+          description: 视频下载URL
+
+    CreatorContentListResponse:
+      type: object
+      required:
+        - contents
+        - has_more
+      properties:
+        contents:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentContent'
+          description: 视频列表
+        has_more:
+          type: boolean
+          description: 是否还有更多
+        next_cursor:
+          type: string
+          description: 下一页游标
+          default: ""
+
+    CreatorContentListOkResponse:
+      type: object
+      properties:
+        biz_code:
+          type: integer
+          description: 业务状态码
+          default: 0
+        msg:
+          type: string
+          description: 响应消息
+          default: "OK!"
+        isok:
+          type: boolean
+          description: 是否成功
+          default: true
+        data:
+          $ref: '#/components/schemas/CreatorContentListResponse'
+
+    ContentDetailRequest:
+      type: object
+      required:
+        - platform
+        - content_url
+        - cookies
+      properties:
+        platform:
+          $ref: '#/components/schemas/PlatformEnum'
+        content_url:
+          type: string
+          description: 内容URL
+        cookies:
+          type: string
+          description: 登录成功后的cookies
+
+    Content:
+      type: object
+      required:
+        - id
+        - url
+        - title
+        - content_type
+        - cover_url
+        - video_download_url
+      properties:
+        id:
+          type: string
+          description: 内容ID
+        url:
+          type: string
+          description: 内容URL
+        title:
+          type: string
+          description: 内容标题
+        content_type:
+          $ref: '#/components/schemas/ContentTypeEnum'
+        cover_url:
+          type: string
+          description: 封面URL
+        image_urls:
+          type: array
+          items:
+            type: string
+          description: 图片URL列表
+          nullable: true
+        video_download_url:
+          type: string
+          description: 视频下载URL
+
+    ContentDetailResponse:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          $ref: '#/components/schemas/Content'
+
+    ContentDetailOkResponse:
+      type: object
+      properties:
+        biz_code:
+          type: integer
+          description: 业务状态码
+          default: 0
+        msg:
+          type: string
+          description: 响应消息
+          default: "OK!"
+        isok:
+          type: boolean
+          description: 是否成功
+          default: true
+        data:
+          $ref: '#/components/schemas/ContentDetailResponse' 

@@ -1,0 +1,101 @@
+{
+  "modes": {
+    "summarize": {
+      "label": "精华提炼",
+      "description": "快速掌握核心要点，节省阅读时间"
+    },
+    "analyze": {
+      "label": "深度拆解",
+      "description": "以教学视角解构创作技巧，学习爆款方法论"
+    },
+    "template": {
+      "label": "模板学习",
+      "description": "提取可复用的创作模板，应用到你的原创主题"
+    },
+    "style_explore": {
+      "label": "风格探索",
+      "description": "探索同一话题的不同表达风格和视角"
+    }
+  },
+  "errors": {
+    "urlEmpty": "URL 不能为空",
+    "messageEmpty": "消息不能为空",
+    "sessionNotFound": "会话不存在或已过期",
+    "invalidUrl": "无法识别的链接格式",
+    "contentNotFound": "内容不存在或已删除",
+    "cookiesNotFound": "平台 cookies 未配置",
+    "fetchFailed": "内容获取失败",
+    "downloadFailed": "视频下载失败",
+    "audioExtractFailed": "音频提取失败",
+    "asrFailed": "语音转录失败",
+    "analysisFailed": "内容分析失败",
+    "generationFailed": "文案生成失败",
+    "voiceCloneFailed": "语音克隆失败",
+    "voiceCloneSourceMissing": "缺少可用于克隆的音频来源，请提供 sample_audio_url 或先获取内容音频链接",
+    "voiceCloneDownloadFailed": "语音样本下载失败",
+    "voiceCloneSourceTooLarge": "语音样本过大，请提供 10MB 以内音频",
+    "ttsFailed": "文本转语音失败",
+    "ttsVoiceMissing": "缺少可用音色，请先克隆声音或传入 voice_id",
+    "ttsTextMissing": "缺少要转语音的文本",
+    "lipsyncFailed": "唇形同步生成失败",
+    "lipsyncVideoMissing": "缺少视频来源，请上传视频或先获取内容视频",
+    "lipsyncAudioMissing": "缺少音频来源，请提供音频 URL、先执行 TTS 或提供脚本",
+    "reenterUrl": "请检查链接是否正确并重新发送",
+    "missingState": "缺少必需的状态字段：{{fields}}",
+    "internalError": "内部错误",
+    "serviceUnavailable": "AI 服务暂时不可用: {{error}}"
+  },
+  "intent": {
+    "analyzing": "正在分析意图..."
+  },
+  "progress": {
+    "parsingLink": "正在解析链接...",
+    "parseComplete": "链接解析完成：{{platform}}",
+    "fetchingContent": "正在获取内容...",
+    "fetchComplete": "内容获取完成：{{title}}",
+    "downloadVideo": "下载视频",
+    "extractAudio": "提取音频",
+    "transcribe": "语音转文字",
+    "downloadComplete": "下载完成：{{size}} MB",
+    "extractComplete": "音频提取完成：{{size}} MB",
+    "transcribeComplete": "转录完成，共 {{count}} 字",
+    "mergeBilibili": "下载并合并B站视频",
+    "mergeComplete": "视频合并完成",
+    "mergeFailed": "合并失败：{{error}}",
+    "skipTranscript": "非视频内容，跳过转录",
+    "webpageLink": "视频链接为网页地址，跳过转录",
+    "usingCached": "使用已有转录结果（{{count}}字）",
+    "cloningVoice": "正在克隆语音...",
+    "cloneVoiceComplete": "语音克隆完成：{{voice_id}}",
+    "generatingTts": "正在生成语音...",
+    "ttsComplete": "语音生成完成",
+    "generatingLipsync": "正在生成唇形同步...",
+    "lipsyncComplete": "唇形同步任务已创建",
+    "videoProcessFailed": "视频处理失败：{{error}}",
+    "asrNotAvailable": "ASR 服务不可用",
+    "downloadingImages": "正在下载图片（{{count}}张）用于视觉分析..."
+  },
+  "tools": {
+    "parseLink": {
+      "label": "解析链接",
+      "completedLabel": "已解析链接"
+    },
+    "fetchContent": {
+      "label": "获取内容",
+      "completedLabel": "已获取内容"
+    },
+    "processVideo": {
+      "label": "处理视频",
+      "completedLabel": "已处理视频"
+    }
+  },
+  "platforms": {
+    "xhs": "小红书",
+    "xiaohongshu": "小红书",
+    "dy": "抖音",
+    "douyin": "抖音",
+    "bilibili": "B站",
+    "ks": "快手",
+    "kuaishou": "快手"
+  }
+}

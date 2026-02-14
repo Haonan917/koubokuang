@@ -1,0 +1,5 @@
+pydantic==2.10.4
+tornado==6.1
+httpx==0.24.0
+tenacity==8.2.2
+pyhumps==3.8.0

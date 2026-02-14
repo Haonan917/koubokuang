@@ -1,0 +1,57 @@
+-- ============================================================================
+-- V0XX: 示例 - 添加新字段
+-- ============================================================================
+-- 这是一个模板文件，展示如何编写 ALTER TABLE 迁移
+-- 使用时复制此文件并重命名为 V{版本号}__{描述}.sql
+-- ============================================================================
+
+-- 方法 1: 简单的 ALTER TABLE (可能报错但会被忽略)
+-- 优点: 简单直接
+-- 缺点: 如果字段已存在会报错 (迁移系统会捕获并跳过)
+ALTER TABLE llm_configs
+ADD COLUMN max_tokens INT DEFAULT 4096 COMMENT '最大输出 tokens';
+
+-- 方法 2: 使用存储过程检查字段是否存在 (推荐用于关键迁移)
+-- 优点: 完全幂等，不会报错
+-- 缺点: 语法复杂
+DELIMITER //
+CREATE PROCEDURE add_column_if_not_exists()
+BEGIN
+    IF NOT EXISTS (
+        SELECT * FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'llm_configs'
+          AND COLUMN_NAME = 'temperature'
+    ) THEN
+        ALTER TABLE llm_configs
+        ADD COLUMN temperature DECIMAL(3,2) DEFAULT 0.70 COMMENT '采样温度';
+    END IF;
+END //
+DELIMITER ;
+
+CALL add_column_if_not_exists();
+DROP PROCEDURE IF EXISTS add_column_if_not_exists;
+
+
+-- 方法 3: 使用 INSERT ... SELECT 进行数据迁移
+-- 适用于需要数据转换的场景
+INSERT INTO new_table (col1, col2)
+SELECT old_col1, old_col2 FROM old_table
+WHERE NOT EXISTS (SELECT 1 FROM new_table WHERE id = old_table.id);
+
+
+-- 方法 4: 索引变更
+-- 添加索引 (幂等)
+CREATE INDEX IF NOT EXISTS idx_llm_configs_provider ON llm_configs(provider);
+
+-- 删除索引前先检查是否存在
+-- ALTER TABLE llm_configs DROP INDEX IF EXISTS idx_old_index;  -- MySQL 8.0+
+
+
+-- ============================================================================
+-- 注意事项
+-- ============================================================================
+-- 1. 每个迁移文件只做一件事
+-- 2. ALTER TABLE 不支持 IF NOT EXISTS，错误会被迁移系统捕获并跳过
+-- 3. 复杂的数据迁移建议用 Python 脚本
+-- 4. 生产环境执行前先备份数据库

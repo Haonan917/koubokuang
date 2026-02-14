@@ -1,0 +1,206 @@
+# ============================================================
+# Content Remix Agent - Docker Compose Configuration
+# ============================================================
+#
+# Services:
+#   - frontend: React SPA served by Nginx (port 80)
+#   - backend: FastAPI Agent server (port 8001)
+#   - mysql: MySQL 8.0 database (port 3306)
+#   - download-server: Media download service (port 8205)
+#   - sign-srv: Signature service (port 8989)
+#
+# Usage:
+#   1. Copy .env.example to .env and configure
+#   2. docker-compose up -d --build
+#   3. Access: http://localhost
+#
+# GPU Support (Linux/Windows WSL2 only):
+#   Uncomment the deploy section under backend service
+#
+# ============================================================
+
+services:
+  # -------------------- Frontend --------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: remix-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - remix-network
+
+  # -------------------- Backend --------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: remix-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      download-server:
+        condition: service_started
+    environment:
+      # DownloadServer
+      - DOWNLOAD_SERVER_BASE=http://download-server:8205
+      - DOWNLOAD_SERVER_TIMEOUT=60
+
+      # ASR Configuration
+      - ASR_BACKEND=${ASR_BACKEND:-bcut}
+      - ASR_DEVICE=${ASR_DEVICE:-cpu}
+      - ASR_MODEL=${ASR_MODEL:-paraformer-zh}
+      - ASR_VAD_MODEL=${ASR_VAD_MODEL:-fsmn-vad}
+      - ASR_PUNC_MODEL=${ASR_PUNC_MODEL:-ct-punc-c}
+
+      # LLM Provider
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - ANTHROPIC_MODEL_NAME=${ANTHROPIC_MODEL_NAME:-claude-3-5-sonnet-20241022}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+
+      # Thinking/Reasoning
+      - ENABLE_THINKING=${ENABLE_THINKING:-true}
+      - THINKING_BUDGET_TOKENS=${THINKING_BUDGET_TOKENS:-4096}
+
+      # Agent Memory
+      - MEMORY_BACKEND=${MEMORY_BACKEND:-mysql}
+      - AGENT_DB_HOST=mysql
+      - AGENT_DB_PORT=3306
+      - AGENT_DB_USER=root
+      - AGENT_DB_PASSWORD=${DB_PASSWORD:-123456}
+      - AGENT_DB_NAME=remix_agent
+
+      # API Server
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Development
+      - USE_MOCK=${USE_MOCK:-false}
+    volumes:
+      # FunASR model cache (persistent)
+      - funasr-models:/root/.cache/modelscope
+      # Temporary files
+      - ./temp:/app/temp
+      # Persistent assets (covers, videos)
+      - ./assets:/app/assets
+    networks:
+      - remix-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    # -------------------- GPU Support (Linux/Windows WSL2) --------------------
+    # Uncomment below for GPU acceleration (requires NVIDIA Container Toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # -------------------- Download Server --------------------
+  download-server:
+    build:
+      context: ./services/DownloadServer
+      dockerfile: Dockerfile
+    container_name: download-server
+    restart: unless-stopped
+    ports:
+      - "8205:8205"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      sign-srv:
+        condition: service_healthy
+    environment:
+      # Database
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-123456}
+      - DB_NAME=media_crawler_pro
+      # Signature service
+      - SIGN_SRV_HOST=sign-srv
+      - SIGN_SRV_PORT=8989
+    networks:
+      - remix-network
+
+  # -------------------- Signature Service --------------------
+  sign-srv:
+    build:
+      context: ./services/SignSrv
+      dockerfile: Dockerfile
+    image: mediacrawler_signsrv:latest
+    container_name: sign-srv
+    restart: unless-stopped
+    ports:
+      - "8989:8989"
+    environment:
+      - APP_PORT=8989
+      - APP_HOST=0.0.0.0
+      - SIGN_TYPE=javascript
+    networks:
+      - remix-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/signsrv/pong"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # -------------------- MySQL Database --------------------
+  mysql:
+    image: mysql:8.0
+    container_name: remix-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123456}
+      MYSQL_DATABASE: media_crawler_pro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    volumes:
+      # Persistent data
+      - mysql-data:/var/lib/mysql
+      # Init scripts (will run on first startup)
+      - ./backend/schema:/docker-entrypoint-initdb.d:ro
+    networks:
+      - remix-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+# -------------------- Volumes --------------------
+volumes:
+  mysql-data:
+    name: remix-mysql-data
+  funasr-models:
+    name: remix-funasr-models
+
+# -------------------- Networks --------------------
+networks:
+  remix-network:
+    name: remix-network
+    driver: bridge

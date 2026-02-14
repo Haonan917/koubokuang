@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.git/
+logs/
+docs/
+*.md
+*.png
+LICENSE
+.DS_Store

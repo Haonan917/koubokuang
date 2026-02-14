@@ -1,0 +1,40 @@
+/* ========================================
+ * Local Font Definitions
+ * 本地字体定义 - 替代 Google Fonts
+ * ======================================== */
+
+/* Material Symbols Outlined - 图标字体 */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;  /* 关键：block 而非 swap，避免 FOUT（字体加载前显示空白而非文字名称） */
+  src: url('./material-symbols/MaterialSymbolsOutlined.woff2') format('woff2');
+}
+
+/* Space Grotesk - 标题/显示字体 */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./space-grotesk/SpaceGrotesk-Variable.woff2') format('woff2');
+}
+
+/* Manrope - 正文字体 */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./manrope/Manrope-Variable.woff2') format('woff2');
+}
+
+/* JetBrains Mono - 代码/等宽字体 */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('./jetbrains-mono/JetBrainsMono-Variable.woff2') format('woff2');
+}

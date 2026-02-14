@@ -1,0 +1,101 @@
+{
+  "modes": {
+    "summarize": {
+      "label": "Summarize",
+      "description": "Quickly grasp core points, save reading time"
+    },
+    "analyze": {
+      "label": "Deep Analysis",
+      "description": "Deconstruct creation techniques from a teaching perspective"
+    },
+    "template": {
+      "label": "Template",
+      "description": "Extract reusable templates for your original topics"
+    },
+    "style_explore": {
+      "label": "Style Explore",
+      "description": "Explore different styles and perspectives on the same topic"
+    }
+  },
+  "errors": {
+    "urlEmpty": "URL cannot be empty",
+    "messageEmpty": "Message cannot be empty",
+    "sessionNotFound": "Session not found or expired",
+    "invalidUrl": "Unable to recognize link format",
+    "contentNotFound": "Content not found or deleted",
+    "cookiesNotFound": "Platform cookies not configured",
+    "fetchFailed": "Failed to fetch content",
+    "downloadFailed": "Video download failed",
+    "audioExtractFailed": "Audio extraction failed",
+    "asrFailed": "Speech transcription failed",
+    "analysisFailed": "Content analysis failed",
+    "generationFailed": "Content generation failed",
+    "voiceCloneFailed": "Voice cloning failed",
+    "voiceCloneSourceMissing": "No audio source found for cloning. Provide sample_audio_url or fetch content audio first",
+    "voiceCloneDownloadFailed": "Failed to download voice sample",
+    "voiceCloneSourceTooLarge": "Voice sample is too large. Please use audio within 10MB",
+    "ttsFailed": "Text-to-speech failed",
+    "ttsVoiceMissing": "No available voice. Clone a voice first or pass voice_id",
+    "ttsTextMissing": "Missing text to synthesize",
+    "lipsyncFailed": "Lipsync generation failed",
+    "lipsyncVideoMissing": "Missing video source. Upload a video or fetch content video first",
+    "lipsyncAudioMissing": "Missing audio source. Provide audio URL, run TTS first, or provide script text",
+    "reenterUrl": "Please check the link and send a valid URL",
+    "missingState": "Missing required state fields: {{fields}}",
+    "internalError": "Internal error",
+    "serviceUnavailable": "AI service temporarily unavailable: {{error}}"
+  },
+  "intent": {
+    "analyzing": "Analyzing intent..."
+  },
+  "progress": {
+    "parsingLink": "Parsing link...",
+    "parseComplete": "Link parsed: {{platform}}",
+    "fetchingContent": "Fetching content...",
+    "fetchComplete": "Content fetched: {{title}}",
+    "downloadVideo": "Download Video",
+    "extractAudio": "Extract Audio",
+    "transcribe": "Speech to Text",
+    "downloadComplete": "Download complete: {{size}} MB",
+    "extractComplete": "Audio extracted: {{size}} MB",
+    "transcribeComplete": "Transcription complete, {{count}} characters",
+    "mergeBilibili": "Download and merge Bilibili video",
+    "mergeComplete": "Video merge complete",
+    "mergeFailed": "Merge failed: {{error}}",
+    "skipTranscript": "Not video content, skipping transcription",
+    "webpageLink": "Video link is a webpage URL, skipping transcription",
+    "usingCached": "Using cached transcript ({{count}} characters)",
+    "cloningVoice": "Cloning voice...",
+    "cloneVoiceComplete": "Voice clone completed: {{voice_id}}",
+    "generatingTts": "Generating speech...",
+    "ttsComplete": "Speech generation completed",
+    "generatingLipsync": "Generating lipsync...",
+    "lipsyncComplete": "Lipsync task created",
+    "videoProcessFailed": "Video processing failed: {{error}}",
+    "asrNotAvailable": "ASR service not available",
+    "downloadingImages": "Downloading images ({{count}}) for visual analysis..."
+  },
+  "tools": {
+    "parseLink": {
+      "label": "Parse Link",
+      "completedLabel": "Link Parsed"
+    },
+    "fetchContent": {
+      "label": "Fetch Content",
+      "completedLabel": "Content Fetched"
+    },
+    "processVideo": {
+      "label": "Process Video",
+      "completedLabel": "Video Processed"
+    }
+  },
+  "platforms": {
+    "xhs": "Xiaohongshu",
+    "xiaohongshu": "Xiaohongshu",
+    "dy": "Douyin",
+    "douyin": "Douyin",
+    "bilibili": "Bilibili",
+    "ks": "Kuaishou",
+    "kuaishou": "Kuaishou"
+  }
+}
