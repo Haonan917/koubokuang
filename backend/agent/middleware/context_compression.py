@@ -190,7 +190,7 @@ def get_model_context_window(model_name: Optional[str] = None) -> int:
     return settings.DEFAULT_CONTEXT_WINDOW
 
 
-def get_current_model_name() -> Optional[str]:
+def get_current_model_name(runtime: Optional[Any] = None) -> Optional[str]:
     """
     获取当前配置的模型名称
 
@@ -202,31 +202,38 @@ def get_current_model_name() -> Optional[str]:
     """
     from config import settings
 
+    # 优先使用 runtime.context 中的模型（支持会话级覆盖）
+    if runtime is not None:
+        model_name = getattr(getattr(runtime, "context", None), "model_name", None)
+        if model_name:
+            return model_name
+
     # 尝试从数据库获取激活配置（与 llm_provider.py 保持一致）
-    try:
-        import pymysql
-        conn = pymysql.connect(
-            host=settings.AGENT_DB_HOST or "localhost",
-            port=settings.AGENT_DB_PORT or 3306,
-            user=settings.AGENT_DB_USER or "root",
-            password=settings.AGENT_DB_PASSWORD or "",
-            database=settings.AGENT_DB_NAME,
-            charset="utf8mb4",
-            connect_timeout=5,
-        )
+    if not getattr(settings, "LLM_CONFIG_LOCKED", False):
         try:
-            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
-                cursor.execute("""
-                    SELECT model_name FROM llm_configs WHERE is_active = 1 LIMIT 1
-                """)
-                result = cursor.fetchone()
-                if result:
-                    logger.debug(f"[ContextCompression] Got model from DB: {result['model_name']}")
-                    return result['model_name']
-        finally:
-            conn.close()
-    except Exception as e:
-        logger.debug(f"[ContextCompression] Failed to get model from DB: {e}, falling back to settings")
+            import pymysql
+            conn = pymysql.connect(
+                host=settings.AGENT_DB_HOST or "localhost",
+                port=settings.AGENT_DB_PORT or 3306,
+                user=settings.AGENT_DB_USER or "root",
+                password=settings.AGENT_DB_PASSWORD or "",
+                database=settings.AGENT_DB_NAME,
+                charset="utf8mb4",
+                connect_timeout=5,
+            )
+            try:
+                with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("""
+                        SELECT model_name FROM llm_configs WHERE is_active = 1 LIMIT 1
+                    """)
+                    result = cursor.fetchone()
+                    if result:
+                        logger.debug(f"[ContextCompression] Got model from DB: {result['model_name']}")
+                        return result['model_name']
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.debug(f"[ContextCompression] Failed to get model from DB: {e}, falling back to settings")
 
     # 回退到 settings 配置
     provider = settings.LLM_PROVIDER.lower()
@@ -416,7 +423,7 @@ def context_compression_middleware(state: Dict[str, Any], runtime: Any) -> Optio
         return None
 
     # 获取模型 context window 和阈值
-    model_name = get_current_model_name()
+    model_name = get_current_model_name(runtime)
     context_window = get_model_context_window(model_name)
     threshold = settings.CONTEXT_COMPRESSION_THRESHOLD
     keep_pairs = settings.CONTEXT_KEEP_RECENT_PAIRS

@@ -194,14 +194,13 @@ async def fetch_content(url: str, runtime: ToolRuntime[RemixContext]) -> Command
             },
         })
 
-        # 对于图文内容（非视频），立即发送 content_info 事件
-        # 视频内容由 process_video 完成后发送（确保 local_video_url 已填充）
-        is_image_content = content.content_type in (ContentType.IMAGE, ContentType.MIXED) or not content.video_url
-        if is_image_content:
-            await adispatch_custom_event(
-                "content_info",
-                {"content_info": content_dict},
-            )
+        # 立即发送 content_info 事件，让前端尽快展示内容卡片。
+        # 对视频内容而言，此时通常还没有 local_video_url；process_video 完成后会再次发送
+        # content_info（包含 local_video_url）以及 transcript 事件，前端会更新已有卡片。
+        await adispatch_custom_event(
+            "content_info",
+            {"content_info": content_dict},
+        )
 
         # 返回包含 ToolMessage 的 Command
         # 构建包含完整信息的结果文本，让 Agent 能看到 desc

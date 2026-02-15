@@ -30,6 +30,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from services.auth_service import User, UserStatus, auth_service
+from config import settings
 
 
 # HTTP Bearer Token 提取器
@@ -135,6 +136,41 @@ async def require_verified_user(
             detail="请先验证邮箱",
         )
     return user
+
+
+async def require_admin(
+    request: Request,
+    user: User = Depends(get_current_user),
+) -> User:
+    """
+    要求管理员权限
+
+    规则：
+    - 优先使用 users.is_admin
+    - 可选：配置 ADMIN_TOKEN 后允许携带 X-Admin-Token 通过（便于运维临时处理）
+    """
+    if getattr(user, "is_admin", 0) == 1:
+        return user
+
+    admin_token = (settings.ADMIN_TOKEN or "").strip()
+    header_token = (request.headers.get("X-Admin-Token") or "").strip()
+    if admin_token and header_token and secrets_compare(admin_token, header_token):
+        return user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="需要管理员权限",
+    )
+
+
+def secrets_compare(a: str, b: str) -> bool:
+    """常量时间比较，避免简单的时序侧信道。"""
+    if len(a) != len(b):
+        return False
+    result = 0
+    for x, y in zip(a.encode("utf-8"), b.encode("utf-8")):
+        result |= x ^ y
+    return result == 0
 
 
 def get_client_ip(request: Request) -> str:

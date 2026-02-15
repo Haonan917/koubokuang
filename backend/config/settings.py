@@ -22,7 +22,7 @@
 支持从环境变量和 .env 文件读取配置。
 """
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -34,7 +34,17 @@ class Settings(BaseSettings):
     """Content Remix Agent 配置"""
 
     # ========== LLM 配置 ==========
-    LLM_PROVIDER: str = "ollama"  # ollama / openai / anthropic
+    LLM_PROVIDER: str = "openai"  # ollama / openai / anthropic / deepseek
+    # 锁定 LLM 配置：禁用前端与数据库配置，仅允许内置/环境配置
+    LLM_CONFIG_LOCKED: bool = True
+    # 允许用户在对话框选择的模型列表（OpenRouter/OpenAI-compatible）
+    LLM_ALLOWED_MODELS: List[str] = [
+        "z-ai/glm-5",
+        "openai/gpt-5.2",
+        "minimax/minimax-m2.5",
+        "google/gemini-3-flash-preview",
+        "deepseek/deepseek-v3.2",
+    ]
 
     # Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
@@ -75,6 +85,26 @@ class Settings(BaseSettings):
     # ========== DownloadServer API ==========
     DOWNLOAD_SERVER_BASE: str = "http://localhost:8205"
     DOWNLOAD_SERVER_TIMEOUT: int = 60
+
+    # ========== Cookies 管控 ==========
+    # 锁定平台 Cookies 配置（仅管理员/内部维护）
+    COOKIES_MANAGED_BY_ADMIN: bool = True
+    # 平台 Cookies（配置文件优先，数据库兜底）
+    PLATFORM_COOKIES_XHS: Optional[str] = None
+    PLATFORM_COOKIES_DY: Optional[str] = None
+    PLATFORM_COOKIES_BILI: Optional[str] = None
+    PLATFORM_COOKIES_KS: Optional[str] = None
+    # Cookies 池自动切换策略
+    COOKIES_POOL_FAILURE_THRESHOLD: int = 3
+    COOKIES_POOL_COOLDOWN_SECONDS: int = 300
+
+    # ========== Crawler DB（media_crawler_pro）==========
+    # 用于爬虫服务的数据落库与 cookies 账号池管理
+    CRAWLER_DB_HOST: Optional[str] = None
+    CRAWLER_DB_PORT: Optional[int] = None
+    CRAWLER_DB_USER: Optional[str] = None
+    CRAWLER_DB_PASSWORD: Optional[str] = None
+    CRAWLER_DB_NAME: str = "media_crawler_pro"
 
     # ========== Voicv API (Voice Cloning) ==========
     VOICV_BASE_URL: str = "https://api.voicv.com/v1"
@@ -224,6 +254,31 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # Access Token 有效期 30 分钟
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # Refresh Token 有效期 30 天
 
+    # ========== Admin / 管理后台 ==========
+    # 管理后台能力依赖 users.is_admin；首次初始化可用脚本设置
+    ADMIN_TOKEN: Optional[str] = None  # 可选：额外的管理访问口令（X-Admin-Token）
+
+    # ========== Bootstrap Admin（开发环境）==========
+    # 仅用于快速搭建本地/测试环境，生产环境建议关闭
+    BOOTSTRAP_ADMIN_ENABLED: bool = False
+    BOOTSTRAP_ADMIN_USERNAME: str = "admin"
+    BOOTSTRAP_ADMIN_PASSWORD: str = "123456"
+    BOOTSTRAP_ADMIN_EMAIL_DOMAIN: str = "example.com"
+    BOOTSTRAP_ADMIN_FORCE_PASSWORD: bool = True
+
+    # ========== Usage & Cost 统计 ==========
+    USAGE_LOGGING_ENABLED: bool = True
+    API_REQUEST_LOGGING_ENABLED: bool = True
+    API_LOG_EXCLUDE_PATH_PREFIXES: List[str] = ["/assets", "/media", "/docs", "/openapi.json", "/favicon.ico"]
+
+    # 模型定价：用于“估算费用”（非账单）
+    # 格式示例：
+    # {
+    #   "openai/gpt-5.2": {"input_per_1m": 5.0, "output_per_1m": 15.0},
+    #   "deepseek/deepseek-v3.2": {"input_per_1m": 0.2, "output_per_1m": 0.8}
+    # }
+    MODEL_PRICING_USD_PER_1M: Dict[str, Dict[str, float]] = {}
+
     # ========== GitHub OAuth ==========
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
@@ -247,7 +302,10 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5373"
 
     model_config = SettingsConfigDict(
-        env_file=str(_PROJECT_ROOT / ".env"),
+        env_file=(
+            str(_PROJECT_ROOT / "config" / "backend.env"),
+            str(_PROJECT_ROOT / ".env"),
+        ),
         env_file_encoding="utf-8",
         extra="ignore",  # 忽略 .env 中未定义的配置项
     )

@@ -14,8 +14,8 @@ class CreatorQueryRequest(BaseModel):
 
     platform: PlatformEnum = Field(..., title="平台", description="平台")
     creator_url: str = Field(..., title="链接", description="链接")
-    cookies: str = Field(
-        ..., title="登录成功后的cookies", description="登录成功后的cookies"
+    cookies: Optional[str] = Field(
+        default=None, title="登录成功后的cookies", description="(deprecated) cookies 将从 DB 账号池自动选择"
     )
     creator_id: Optional[str] = Field(
         default="", title="创作者ID", description="创作者ID"
@@ -44,8 +44,8 @@ class CreatorContentListRequest(BaseModel):
     platform: PlatformEnum = Field(..., title="平台", description="平台")
     creator_id: str = Field(..., title="创作者ID", description="创作者ID")
     cursor: str = Field(default="", title="分页查询游标", description="分页查询游标")
-    cookies: str = Field(
-        ..., title="登录成功后的cookies", description="登录成功后的cookies"
+    cookies: Optional[str] = Field(
+        default=None, title="登录成功后的cookies", description="(deprecated) cookies 将从 DB 账号池自动选择"
     )
 
 

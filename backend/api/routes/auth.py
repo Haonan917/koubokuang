@@ -76,6 +76,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str]
     status: int
     email_verified: bool
+    is_admin: int = 0
 
     @classmethod
     def from_user(cls, user: User) -> "UserResponse":
@@ -86,6 +87,7 @@ class UserResponse(BaseModel):
             avatar_url=user.avatar_url,
             status=user.status,
             email_verified=user.email_verified_at is not None,
+            is_admin=int(getattr(user, "is_admin", 0) or 0),
         )
 
 

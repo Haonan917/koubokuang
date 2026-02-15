@@ -12,6 +12,16 @@ const TOKEN_KEY = 'remix_access_token';
 const REFRESH_TOKEN_KEY = 'remix_refresh_token';
 const USER_KEY = 'remix_user';
 
+function normalizeLoginIdentifier(identifier) {
+  const raw = (identifier || '').trim();
+  if (!raw) return raw;
+  // Allow short username login like "admin" by mapping to admin@example.com (bootstrap-created).
+  if (!raw.includes('@')) {
+    return `${raw}@example.com`;
+  }
+  return raw;
+}
+
 /**
  * 获取 Access Token
  */
@@ -98,10 +108,23 @@ async function fetchAuth(url, options = {}) {
  * 处理 API 响应
  */
 async function handleResponse(response) {
-  const data = await response.json();
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (e) {
+    // 兼容反向代理/错误页导致的非 JSON 响应
+    data = { detail: '服务返回非 JSON 响应，请检查后端是否正常启动' };
+  }
 
   if (!response.ok) {
-    const error = new Error(data.detail || '请求失败');
+    let detail = data?.detail;
+    if (Array.isArray(detail)) {
+      // FastAPI 422: [{loc, msg, type}, ...]
+      detail = detail?.[0]?.msg || '请求参数不合法';
+    } else if (detail && typeof detail === 'object') {
+      detail = detail.message || JSON.stringify(detail);
+    }
+    const error = new Error(detail || '请求失败');
     error.status = response.status;
     error.data = data;
     throw error;
@@ -119,10 +142,11 @@ async function handleResponse(response) {
  * @param {string} displayName - 显示名称（可选）
  */
 export async function register(email, password, displayName = null) {
+  const normalizedEmail = normalizeLoginIdentifier(email);
   const response = await fetchAuth(`${AUTH_API_BASE}/register`, {
     method: 'POST',
     body: JSON.stringify({
-      email,
+      email: normalizedEmail,
       password,
       display_name: displayName,
     }),
@@ -143,9 +167,10 @@ export async function register(email, password, displayName = null) {
  * @param {string} password - 密码
  */
 export async function login(email, password) {
+  const normalizedEmail = normalizeLoginIdentifier(email);
   const response = await fetchAuth(`${AUTH_API_BASE}/login`, {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email: normalizedEmail, password }),
   });
 
   const data = await handleResponse(response);

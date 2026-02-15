@@ -196,3 +196,8 @@ VALUES (6, 'add user preferences', 'V006__add_user_preferences.sql', 1);
 | V006 | `V006__llm_configs_multimodal.sql` | LLM 配置添加多模态支持字段 |
 | V007 | `V007__user_auth.sql` | 用户认证系统 (users, oauth, tokens) |
 | V008 | `V008__oauth_states.sql` | OAuth state 持久化存储 |
+| V009 | `V009__media_ai_assets.sql` | Media-AI 资源表（用户语音/形象等资产） |
+| V010 | `V010__platform_cookie_pool.sql` | 平台 Cookies 池（多账号轮换） |
+| V011 | `V011__user_admin_flag.sql` | 用户管理员字段（is_admin） |
+| V012 | `V012__usage_events.sql` | LLM/API 使用事件表（token/费用估算/计数） |
+| V013 | `V013__ensure_media_ai_assets.sql` | 兜底创建 media_ai_* 表（修复历史迁移冲突） |

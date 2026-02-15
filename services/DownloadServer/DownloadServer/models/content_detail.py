@@ -75,8 +75,8 @@ class ContentDetailRequest(BaseModel):
 
     platform: PlatformEnum = Field(..., title="平台", description="平台")
     content_url: str = Field(..., title="内容URL", description="内容URL")
-    cookies: str = Field(
-        ..., title="登录成功后的cookies", description="登录成功后的cookies"
+    cookies: Optional[str] = Field(
+        default=None, title="登录成功后的cookies", description="(deprecated) cookies 将从 DB 账号池自动选择"
     )
 
 

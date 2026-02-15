@@ -30,7 +30,12 @@ export default function LoginPage() {
     }
 
     try {
-      await login(email, password);
+      const data = await login(email, password);
+      // 如果是管理员，默认进入管理台（除非明确从别处跳转回来）
+      if (data?.user?.is_admin === 1) {
+        navigate('/admin', { replace: true });
+        return;
+      }
       navigate(from, { replace: true });
     } catch (err) {
       // Error handled in useAuth
@@ -85,10 +90,10 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-semibold text-text-secondary mb-2">
-                {t('auth.email')}
+                邮箱 / 账号
               </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t('auth.emailPlaceholder')}

@@ -82,6 +82,7 @@ export async function sendAnalyzeRequest(url, options = {}, callbacks = {}) {
     preferredAvatarId,
     preferredAvatarTitle,
     preferredAvatarUrl,
+    preferredModelName,
   } = options;
 
   const payload = {
@@ -96,6 +97,7 @@ export async function sendAnalyzeRequest(url, options = {}, callbacks = {}) {
   if (preferredAvatarId) payload.preferred_avatar_id = preferredAvatarId;
   if (preferredAvatarTitle) payload.preferred_avatar_title = preferredAvatarTitle;
   if (preferredAvatarUrl) payload.preferred_avatar_url = preferredAvatarUrl;
+  if (preferredModelName) payload.model_name = preferredModelName;
 
   return createSSEStream(`${API_BASE}/analyze`, payload, callbacks);
 }
@@ -118,6 +120,7 @@ export async function sendChatRequest(message, sessionId, options = {}, callback
   if (options.preferredAvatarId) payload.preferred_avatar_id = options.preferredAvatarId;
   if (options.preferredAvatarTitle) payload.preferred_avatar_title = options.preferredAvatarTitle;
   if (options.preferredAvatarUrl) payload.preferred_avatar_url = options.preferredAvatarUrl;
+  if (options.preferredModelName) payload.model_name = options.preferredModelName;
   return createSSEStream(`${API_BASE}/chat`, payload, callbacks);
 }
 
@@ -169,6 +172,7 @@ export async function sendChatMessage(message, token, options = {}, callbacks = 
       preferredAvatarId: options.preferredAvatarId,
       preferredAvatarTitle: options.preferredAvatarTitle,
       preferredAvatarUrl: options.preferredAvatarUrl,
+      preferredModelName: options.preferredModelName,
     }, callbacks);
   } else {
     // 对话追问请求 - 需要 session_id
@@ -178,6 +182,7 @@ export async function sendChatMessage(message, token, options = {}, callbacks = 
       preferredAvatarId: options.preferredAvatarId,
       preferredAvatarTitle: options.preferredAvatarTitle,
       preferredAvatarUrl: options.preferredAvatarUrl,
+      preferredModelName: options.preferredModelName,
     }, callbacks);
   }
 }

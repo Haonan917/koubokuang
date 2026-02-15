@@ -5,9 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "httpx==0.24.0",
+    "aiomysql==0.2.0",
+    "httpx[socks]==0.24.0",
     "pydantic==2.10.4",
     "pyhumps==3.8.0",
+    "redis==4.6.0",
     "tenacity==8.2.2",
     "tornado==6.1",
 ]

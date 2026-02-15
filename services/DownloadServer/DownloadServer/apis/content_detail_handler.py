@@ -22,25 +22,10 @@ class ContentDetailHandler(TornadoBaseReqHandler):
         if not req:
             return
 
-        logic = ContentDetailLogic(platform=req.platform, cookies=req.cookies)
+        logic = ContentDetailLogic(platform=req.platform, cookies=req.cookies or "")
         await logic.async_initialize()
 
-        try:
-            is_valid = await logic.check_cookies()
-            if not is_valid:
-                self.return_error_info(
-                    errorcode=ApiCode.INVALID_PARAMETER,
-                    errmsg="无效的cookies，请检查cookies的登录态是否正确。",
-                )
-                return
-        except Exception as e:
-            logger.error(
-                f"[ContentDetailHandler.post] Check cookies failed: {traceback.format_exc()}"
-            )
-            self.return_error_info(
-                errorcode=ApiCode.EXCEPTION, errmsg="检查cookies登录态失败。"
-            )
-            return
+        # cookies validity is checked during async_initialize (DB pool rotation)
         try:
             is_valid, extract_msg, content_id = logic.extract_content_id(
                 req.content_url

@@ -5,6 +5,7 @@ import { DEFAULT_MODE } from '../constants/modes';
 import { ensureChatPreferences, readChatPreferences, writeChatPreferences } from '../utils/chatPreferences';
 import { fetchMediaAiAvatars, fetchMediaAiVoices } from '../services/api';
 import { normalizeAvatarItem, normalizeVoiceItem, toPlayableMediaUrl } from '../utils/mediaUrl';
+import { LLM_MODEL_OPTIONS } from '../constants/llmModels';
 
 /**
  * ChatInputFooter - 底部统一输入组件
@@ -25,6 +26,7 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
   const [avatarOptions, setAvatarOptions] = useState([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedAvatarId, setSelectedAvatarId] = useState('');
+  const [selectedModelName, setSelectedModelName] = useState('');
   const selectedVoice = voiceOptions.find((v) => v.voiceId === selectedVoiceId) || null;
   const selectedAvatar = avatarOptions.find((a) => (a.avatarId || String(a.id || '')) === selectedAvatarId) || null;
 
@@ -39,11 +41,12 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
 
   const refreshPreferences = async () => {
     const applyPreferences = () => {
-      const { voices, avatars, voiceId, avatarId } = ensureChatPreferences();
+      const { voices, avatars, voiceId, avatarId, modelName } = ensureChatPreferences();
       setVoiceOptions(voices);
       setAvatarOptions(avatars);
       setSelectedVoiceId(voiceId || '');
       setSelectedAvatarId(avatarId || '');
+      setSelectedModelName(modelName || '');
     };
 
     applyPreferences();
@@ -159,6 +162,26 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
       <div className="max-w-4xl mx-auto w-full px-8 flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-4 text-xs text-text-muted">
           <div className="flex items-center gap-2">
+            <span className="text-text-secondary">LLM</span>
+            <select
+              value={selectedModelName}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSelectedModelName(next);
+                const pref = readChatPreferences();
+                writeChatPreferences({ voiceId: pref.voiceId, avatarId: pref.avatarId, modelName: next });
+              }}
+              className="bg-bg-secondary border border-border-default rounded-md px-2 py-1 text-xs"
+              disabled={LLM_MODEL_OPTIONS.length === 0}
+            >
+              {LLM_MODEL_OPTIONS.map((model) => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="text-text-secondary">{t('mediaAi.chatVoiceLabel')}</span>
             <select
               value={selectedVoiceId}
@@ -166,7 +189,7 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
                 const next = e.target.value;
                 setSelectedVoiceId(next);
                 const pref = readChatPreferences();
-                writeChatPreferences({ voiceId: next, avatarId: pref.avatarId });
+                writeChatPreferences({ voiceId: next, avatarId: pref.avatarId, modelName: pref.modelName });
               }}
               onFocus={refreshPreferences}
               className="bg-bg-secondary border border-border-default rounded-md px-2 py-1 text-xs"
@@ -187,7 +210,7 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
                   if (!next) return;
                   setSelectedVoiceId(next);
                   const pref = readChatPreferences();
-                  writeChatPreferences({ voiceId: next, avatarId: pref.avatarId });
+                  writeChatPreferences({ voiceId: next, avatarId: pref.avatarId, modelName: pref.modelName });
                 }}
                 className="px-2 py-1 rounded-md border border-border-default"
               >
@@ -206,7 +229,7 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
                 const next = e.target.value;
                 setSelectedAvatarId(next);
                 const pref = readChatPreferences();
-                writeChatPreferences({ voiceId: pref.voiceId, avatarId: next });
+                writeChatPreferences({ voiceId: pref.voiceId, avatarId: next, modelName: pref.modelName });
               }}
               onFocus={refreshPreferences}
               className="bg-bg-secondary border border-border-default rounded-md px-2 py-1 text-xs"
@@ -227,7 +250,7 @@ function ChatInputFooter({ onSend, onAnalyze, onStop, loading, sessionId }) {
                   if (!next) return;
                   setSelectedAvatarId(String(next));
                   const pref = readChatPreferences();
-                  writeChatPreferences({ voiceId: pref.voiceId, avatarId: String(next) });
+                  writeChatPreferences({ voiceId: pref.voiceId, avatarId: String(next), modelName: pref.modelName });
                 }}
                 className="px-2 py-1 rounded-md border border-border-default"
               >

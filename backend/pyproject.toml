@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.23.0",
     "sse-starlette>=1.6.0",
     # HTTP 客户端
-    "httpx>=0.24.0",
+    "httpx[socks]>=0.24.0",
     "python-multipart>=0.0.9",
     # LLM & Agent
     "langchain>=0.3.0",

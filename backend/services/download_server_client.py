@@ -22,13 +22,13 @@ DownloadServer 客户端 - 调用 MediaCrawlerPro-Downloader API 获取内容信
 通过 DownloadServer API 获取视频详情和下载链接，从 platform_cookies 表获取平台 cookies。
 支持 B站、抖音、小红书、快手等平台。
 """
-from typing import Optional
+from typing import Optional, Tuple
 
 import httpx
 
 from config import settings
 from schemas import Platform, ContentType, ContentParseResponse
-from services.cookies_service import cookies_service, CookiesNotConfiguredError
+from utils.logger import logger
 
 
 class DownloadServerError(Exception):
@@ -132,28 +132,16 @@ class DownloadServerClient:
 
         raise ValueError(f"不支持的平台: {url}")
 
-    async def _get_cookies(self, platform: Platform) -> str:
-        """
-        从 platform_cookies 表获取平台 cookies
-
-        Args:
-            platform: 平台枚举
-
-        Returns:
-            cookies 字符串
-
-        Raises:
-            CookiesNotFoundError: 未找到有效的 cookies
-        """
-        platform_name = PLATFORM_MAPPING.get(platform)
-
-        if not platform_name:
-            raise CookiesNotFoundError(f"未知平台: {platform}")
-
-        try:
-            return await cookies_service.get_cookies(platform_name)
-        except CookiesNotConfiguredError as e:
-            raise CookiesNotFoundError(str(e))
+    @staticmethod
+    def _is_cookie_related_error(msg: str) -> bool:
+        if not msg:
+            return False
+        m = msg.lower()
+        keywords = [
+            "cookies", "cookie", "登录", "失效", "过期",
+            "verify", "captcha", "风控", "频次", "blocked",
+        ]
+        return any(k in m for k in keywords)
 
     async def fetch_content(self, url: str) -> ContentParseResponse:
         """
@@ -176,9 +164,6 @@ class DownloadServerClient:
         except ValueError as e:
             raise DownloadServerError(str(e))
 
-        # 2. 获取 cookies
-        cookies = await self._get_cookies(platform)
-
         # 3. 调用 API
         api_platform = PLATFORM_MAPPING.get(platform)
         if not api_platform:
@@ -191,7 +176,6 @@ class DownloadServerClient:
                     json={
                         "platform": api_platform,
                         "content_url": url,
-                        "cookies": cookies,
                     }
                 )
                 response.raise_for_status()
@@ -207,6 +191,8 @@ class DownloadServerClient:
         # 4. 解析响应
         if data.get("biz_code") != 0:
             msg = data.get("msg", "未知错误")
+            if self._is_cookie_related_error(msg):
+                logger.warning(f"[DownloadServerClient] cookie-related error from DownloadServer: {msg}")
             if "not found" in msg.lower() or "不存在" in msg:
                 raise ContentNotFoundError(f"内容不存在: {msg}")
             raise DownloadServerError(f"API 错误: {msg}")

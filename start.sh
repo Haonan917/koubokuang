@@ -27,6 +27,22 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
+source_env_file() {
+    local env_file="$1"
+    if [ -f "$env_file" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$env_file"
+        set +a
+    fi
+}
+
+load_service_env() {
+    local service_name="$1"
+    source_env_file "config/common.env"
+    source_env_file "config/${service_name}.env"
+}
+
 # 检查依赖
 echo -e "${CYAN}检查依赖...${NC}"
 if ! command -v uv &>/dev/null; then
@@ -41,9 +57,7 @@ fi
 # 启动后端
 echo -e "${GREEN}[后端] 安装依赖并启动 (端口 8001)...${NC}"
 (
-    set -a
-    [ -f backend/.env ] && source backend/.env
-    set +a
+    load_service_env "backend"
     cd backend
     # uv sync 2>&1 | sed "s/^/$(printf "${RED}[后端]${NC} ")/"
     uv run python scripts/run_api_server.py 2>&1 | sed "s/^/$(printf "${RED}[后端]${NC} ")/"
@@ -53,9 +67,10 @@ BACKEND_PID=$!
 # 启动前端
 echo -e "${BLUE}[前端] 安装依赖并启动 (端口 5373)...${NC}"
 (
+    load_service_env "frontend"
     cd frontend
     npm install --silent 2>&1 | sed "s/^/$(printf "${BLUE}[前端]${NC} ")/"
-    npm run dev 2>&1 | sed "s/^/$(printf "${BLUE}[前端]${NC} ")/"
+    npm run dev -- --host "${FRONTEND_HOST:-0.0.0.0}" --port "${FRONTEND_PORT:-5373}" 2>&1 | sed "s/^/$(printf "${BLUE}[前端]${NC} ")/"
 ) &
 FRONTEND_PID=$!
 
@@ -63,7 +78,7 @@ echo ""
 echo -e "${CYAN}========================================${NC}"
 echo -e "${CYAN}  Content Remix Agent 开发服务器${NC}"
 echo -e "${CYAN}  后端: http://localhost:8001${NC}"
-echo -e "${CYAN}  前端: http://localhost:5373${NC}"
+echo -e "${CYAN}  前端: http://localhost:${FRONTEND_PORT:-5373}${NC}"
 echo -e "${CYAN}  按 Ctrl+C 停止所有服务${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""

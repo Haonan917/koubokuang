@@ -25,6 +25,8 @@ LLM 配置管理 API (简化版)
 from fastapi import APIRouter, HTTPException
 from aiomysql import IntegrityError
 
+from config import settings
+from llm_provider import is_llm_configured
 from schemas import (
     LLMConfigCreateRequest,
     LLMConfigUpdateRequest,
@@ -36,6 +38,11 @@ from services.llm_config_service import llm_config_service
 router = APIRouter()
 
 
+def _ensure_llm_config_unlocked():
+    if getattr(settings, "LLM_CONFIG_LOCKED", False):
+        raise HTTPException(status_code=403, detail="LLM 配置已锁定，当前部署不允许用户配置")
+
+
 @router.get("/status")
 async def get_llm_config_status():
     """
@@ -43,6 +50,12 @@ async def get_llm_config_status():
 
     返回是否有激活的 LLM 配置，用于前端在聊天前检查。
     """
+    if getattr(settings, "LLM_CONFIG_LOCKED", False):
+        return {
+            "configured": is_llm_configured(),
+            "active_config": None,
+        }
+
     active_config = await llm_config_service.get_active_config_name()
     return {
         "configured": active_config is not None,
@@ -57,6 +70,7 @@ async def list_llm_configs():
 
     返回所有已配置的 LLM 信息（不含 API Key 明文）。
     """
+    _ensure_llm_config_unlocked()
     items = await llm_config_service.list_all()
     active_config = await llm_config_service.get_active_config_name()
     return LLMConfigListResponse(items=items, active_config=active_config)
@@ -69,6 +83,7 @@ async def get_provider_templates():
 
     返回常用的 LLM 配置模板供用户参考。
     """
+    _ensure_llm_config_unlocked()
     templates = {
         "openai": [
             {
@@ -164,6 +179,7 @@ async def get_llm_config(config_name: str):
     Returns:
         LLMConfigInfo (不含 API Key 明文)
     """
+    _ensure_llm_config_unlocked()
     row = await llm_config_service.get_config(config_name, include_api_key=False)
 
     if not row:
@@ -196,6 +212,7 @@ async def create_llm_config(request: LLMConfigCreateRequest):
     Returns:
         操作结果
     """
+    _ensure_llm_config_unlocked()
     try:
         auto_activated = await llm_config_service.create_config(request)
         message = f"配置 {request.config_name} 已创建"
@@ -221,6 +238,7 @@ async def update_llm_config(config_name: str, request: LLMConfigUpdateRequest):
     Returns:
         操作结果
     """
+    _ensure_llm_config_unlocked()
     # 检查配置是否存在
     existing = await llm_config_service.get_config(config_name)
     if not existing:
@@ -245,6 +263,7 @@ async def delete_llm_config(config_name: str):
     Returns:
         操作结果
     """
+    _ensure_llm_config_unlocked()
     deleted = await llm_config_service.delete_config(config_name)
 
     if not deleted:
@@ -266,6 +285,7 @@ async def activate_llm_config(config_name: str):
     Returns:
         操作结果
     """
+    _ensure_llm_config_unlocked()
     # 检查配置是否存在
     existing = await llm_config_service.get_config(config_name)
     if not existing:

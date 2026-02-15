@@ -1,4 +1,5 @@
 import { normalizeAvatarItem, normalizeVoiceItem } from './mediaUrl';
+import { LLM_MODEL_OPTIONS } from '../constants/llmModels';
 
 const VOICES_STORAGE_KEY = 'media_ai_voices';
 const AVATARS_STORAGE_KEY = 'media_ai_avatars';
@@ -29,9 +30,10 @@ export function readChatPreferences() {
     return {
       voiceId: typeof parsed.voiceId === 'string' ? parsed.voiceId : '',
       avatarId: typeof parsed.avatarId === 'string' ? parsed.avatarId : '',
+      modelName: typeof parsed.modelName === 'string' ? parsed.modelName : '',
     };
   } catch {
-    return { voiceId: '', avatarId: '' };
+    return { voiceId: '', avatarId: '', modelName: '' };
   }
 }
 
@@ -39,6 +41,7 @@ export function writeChatPreferences(next) {
   const payload = {
     voiceId: next?.voiceId || '',
     avatarId: next?.avatarId || '',
+    modelName: next?.modelName || '',
   };
   localStorage.setItem(CHAT_PREFS_KEY, JSON.stringify(payload));
 }
@@ -67,11 +70,22 @@ export function ensureChatPreferences() {
   }
 
   if (voiceId !== pref.voiceId || avatarId !== pref.avatarId) {
-    writeChatPreferences({ voiceId, avatarId });
+    writeChatPreferences({ voiceId, avatarId, modelName: pref.modelName });
   }
 
   const selectedVoice = voices.find((v) => v.voiceId === voiceId) || null;
   const selectedAvatar = findAvatar(avatarId) || null;
+  const allowedModels = Array.isArray(LLM_MODEL_OPTIONS) ? LLM_MODEL_OPTIONS : [];
+  let modelName = pref.modelName;
+  if (modelName && !allowedModels.find((m) => m.value === modelName)) {
+    modelName = '';
+  }
+  if (!modelName && allowedModels.length > 0) {
+    modelName = allowedModels[0].value;
+  }
+  if (modelName !== pref.modelName) {
+    writeChatPreferences({ voiceId, avatarId, modelName });
+  }
 
   return {
     voices,
@@ -80,11 +94,12 @@ export function ensureChatPreferences() {
     selectedAvatar,
     voiceId,
     avatarId,
+    modelName,
   };
 }
 
 export function resolveChatPreferredPayload() {
-  const { selectedVoice, selectedAvatar, voiceId, avatarId } = ensureChatPreferences();
+  const { selectedVoice, selectedAvatar, voiceId, avatarId, modelName } = ensureChatPreferences();
   const preferredAvatarUrl = selectedAvatar?.clipVideoUrl || selectedAvatar?.fullVideoUrl || '';
 
   return {
@@ -93,5 +108,6 @@ export function resolveChatPreferredPayload() {
     preferredAvatarId: avatarId || '',
     preferredAvatarTitle: selectedAvatar?.title || '',
     preferredAvatarUrl: preferredAvatarUrl || '',
+    preferredModelName: modelName || '',
   };
 }

@@ -21,7 +21,8 @@
 
 提供 Cookies 的 CRUD 操作，使用 remix_agent 数据库的 platform_cookies 表。
 """
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
 
 import aiomysql
 
@@ -76,8 +77,84 @@ class CookiesService:
         Raises:
             CookiesNotConfiguredError: 未找到有效的 cookies
         """
-        pool = await self._get_pool()
+        record = await self.get_cookie_record(platform)
+        if not record or not record.get("cookies"):
+            raise CookiesNotConfiguredError(
+                f"未找到平台 {platform} 的有效 cookies，请通过 API 添加"
+            )
+        return str(record["cookies"])
 
+    def _get_env_cookies(self, platform: str) -> Optional[str]:
+        normalized = (platform or "").lower().strip()
+        alias_map = {
+            "xhs": "PLATFORM_COOKIES_XHS",
+            "dy": "PLATFORM_COOKIES_DY",
+            "bili": "PLATFORM_COOKIES_BILI",
+            "bilibili": "PLATFORM_COOKIES_BILI",
+            "ks": "PLATFORM_COOKIES_KS",
+            "kuaishou": "PLATFORM_COOKIES_KS",
+        }
+        setting_key = alias_map.get(normalized)
+        if not setting_key:
+            return None
+        value = getattr(settings, setting_key, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+
+    async def get_cookie_record(self, platform: str) -> Optional[Dict[str, Any]]:
+        """
+        获取可用 cookies 记录（配置优先，池化表次之，旧表兜底）
+
+        Returns:
+            {
+              "cookies": str,
+              "source": "env|pool|legacy",
+              "pool_id": int|None
+            }
+        """
+        # 1) 配置文件优先
+        env_cookies = self._get_env_cookies(platform)
+        if env_cookies:
+            return {"cookies": env_cookies, "source": "env", "pool_id": None}
+
+        # 2) 池化表（platform_cookie_pool）
+        pool_record = await self._get_pool_cookie(platform)
+        if pool_record and pool_record.get("cookies"):
+            return {
+                "cookies": pool_record["cookies"],
+                "source": "pool",
+                "pool_id": pool_record["id"],
+            }
+
+        # 3) 旧表兜底（platform_cookies）
+        legacy_cookies = await self._get_legacy_cookie(platform)
+        if legacy_cookies:
+            return {"cookies": legacy_cookies, "source": "legacy", "pool_id": None}
+        return None
+
+    async def _get_pool_cookie(self, platform: str) -> Optional[Dict[str, Any]]:
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cursor:
+                    sql = """
+                        SELECT id, cookies
+                        FROM platform_cookie_pool
+                        WHERE platform = %s
+                          AND status = 0
+                          AND (cooldown_until IS NULL OR cooldown_until <= NOW())
+                        ORDER BY priority DESC, fail_count ASC, last_success_at DESC, updated_at DESC
+                        LIMIT 1
+                    """
+                    await cursor.execute(sql, (platform,))
+                    return await cursor.fetchone()
+        except Exception:
+            # 未迁移或查询异常时静默回退到旧表
+            return None
+
+    async def _get_legacy_cookie(self, platform: str) -> Optional[str]:
+        pool = await self._get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
                 sql = """
@@ -88,13 +165,77 @@ class CookiesService:
                 """
                 await cursor.execute(sql, (platform,))
                 row = await cursor.fetchone()
+                if row and row.get("cookies"):
+                    return row["cookies"]
+        return None
 
-                if not row or not row.get("cookies"):
-                    raise CookiesNotConfiguredError(
-                        f"未找到平台 {platform} 的有效 cookies，请通过 API 添加"
+    async def mark_cookie_success(self, pool_id: Optional[int]) -> None:
+        if not pool_id:
+            return
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    sql = """
+                        UPDATE platform_cookie_pool
+                        SET fail_count = 0,
+                            cooldown_until = NULL,
+                            last_success_at = NOW(),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """
+                    await cursor.execute(sql, (pool_id,))
+        except Exception:
+            return
+
+    async def mark_cookie_failure(self, pool_id: Optional[int], reason: Optional[str] = None) -> None:
+        if not pool_id:
+            return
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cursor:
+                    await cursor.execute(
+                        "SELECT fail_count FROM platform_cookie_pool WHERE id = %s LIMIT 1",
+                        (pool_id,),
                     )
+                    row = await cursor.fetchone()
+                    if not row:
+                        return
+                    next_fail = int(row.get("fail_count") or 0) + 1
+                    threshold = max(1, int(getattr(settings, "COOKIES_POOL_FAILURE_THRESHOLD", 3)))
+                    cooldown_seconds = max(1, int(getattr(settings, "COOKIES_POOL_COOLDOWN_SECONDS", 300)))
+                    now = datetime.utcnow()
+                    cooldown_until = now + timedelta(seconds=cooldown_seconds)
 
-                return row["cookies"]
+                    # 达到阈值后置为过期，否则仅进入冷却
+                    if next_fail >= threshold:
+                        sql = """
+                            UPDATE platform_cookie_pool
+                            SET fail_count = %s,
+                                status = 1,
+                                last_failure_at = NOW(),
+                                cooldown_until = %s,
+                                remark = %s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = %s
+                        """
+                        await cursor.execute(
+                            sql,
+                            (next_fail, cooldown_until, reason if reason else "auto invalid by failures", pool_id),
+                        )
+                    else:
+                        sql = """
+                            UPDATE platform_cookie_pool
+                            SET fail_count = %s,
+                                last_failure_at = NOW(),
+                                cooldown_until = %s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = %s
+                        """
+                        await cursor.execute(sql, (next_fail, cooldown_until, pool_id))
+        except Exception:
+            return
 
     async def get_detail(self, platform: str) -> Optional[CookiesDetail]:
         """

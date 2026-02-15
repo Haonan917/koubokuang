@@ -10,11 +10,15 @@ import httpx
 from httpx import Response
 from tenacity import retry, stop_after_attempt, wait_random
 
+import config
+from pkg.httpx_compat import new_async_client
 from abs.abs_api_client import AbstractApiClient
 from constant.xiaohongshu import XHS_API_URL, XHS_INDEX_URL
 from models.content_detail import ContentDetailResponse
 from models.creator import CreatorContentListResponse, CreatorQueryResponse
 from pkg.media_platform_api.xhs.extractor import XhsExtractor
+from pkg.proxy.proxy_ip_pool import ProxyIpPool, create_ip_pool
+from pkg.proxy.types import IpInfoModel
 from pkg.rpc.sign_srv_client import SignServerClient, XhsSignRequest
 from pkg.tools import utils
 
@@ -30,6 +34,9 @@ from .help import get_search_id
 
 
 class XhsApiClient(AbstractApiClient):
+    _shared_proxy_pool: Optional[ProxyIpPool] = None
+    _proxy_pool_lock = asyncio.Lock()
+
     def __init__(
         self,
         timeout: int = 10,
@@ -48,6 +55,7 @@ class XhsApiClient(AbstractApiClient):
         self._sign_client = SignServerClient()
         self._cookies = cookies
         self._extractor = XhsExtractor()
+        self._ip_proxy: Optional[IpInfoModel] = None
 
     async def async_initialize(self):
         """
@@ -55,7 +63,51 @@ class XhsApiClient(AbstractApiClient):
         Returns:
 
         """
-        pass
+        if not config.ENABLE_IP_PROXY:
+            return
+
+        proxy_pool = await self._get_shared_proxy_pool()
+        self._ip_proxy = await proxy_pool.get_proxy()
+        utils.logger.info(
+            f"[XiaoHongShuClient.async_initialize] use proxy: {self._ip_proxy.ip}:{self._ip_proxy.port}"
+        )
+
+    @classmethod
+    async def _get_shared_proxy_pool(cls) -> ProxyIpPool:
+        if cls._shared_proxy_pool:
+            return cls._shared_proxy_pool
+
+        async with cls._proxy_pool_lock:
+            if cls._shared_proxy_pool:
+                return cls._shared_proxy_pool
+            cls._shared_proxy_pool = await create_ip_pool(
+                ip_pool_count=config.IP_PROXY_POOL_COUNT,
+                enable_validate_ip=True,
+                ip_provider=config.IP_PROXY_PROVIDER_NAME,
+            )
+            return cls._shared_proxy_pool
+
+    async def _switch_proxy(self, reason: str, mark_current_invalid: bool = True):
+        if not config.ENABLE_IP_PROXY:
+            return
+
+        try:
+            pool = await self._get_shared_proxy_pool()
+            if mark_current_invalid and self._ip_proxy:
+                await pool.mark_ip_invalid(self._ip_proxy)
+            self._ip_proxy = await pool.get_proxy()
+            utils.logger.warning(
+                f"[XiaoHongShuClient._switch_proxy] switched proxy due to {reason}, "
+                f"new={self._ip_proxy.ip}:{self._ip_proxy.port}"
+            )
+        except Exception as e:
+            utils.logger.error(f"[XiaoHongShuClient._switch_proxy] failed: {e}")
+
+    @property
+    def _proxies(self) -> Optional[str]:
+        if not config.ENABLE_IP_PROXY or not self._ip_proxy:
+            return None
+        return self._ip_proxy.format_httpx_proxy()
 
     @property
     def headers(self):
@@ -109,39 +161,60 @@ class XhsApiClient(AbstractApiClient):
         if "return_response" in kwargs:
             del kwargs["return_response"]
 
-        async with httpx.AsyncClient() as client:
-            response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        try:
+            async with new_async_client(proxy=self._proxies, trust_env=False) as client:
+                response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        except Exception as e:
+            await self._switch_proxy(reason=f"request exception: {e}", mark_current_invalid=True)
+            raise
+
+        # 记录非 200 的响应，帮助定位 DataFetchError
+        if response.status_code != 200:
+            utils.logger.error(
+                f"[XiaoHongShuClient.request] non-200 response: "
+                f"status={response.status_code}, url={url}, "
+                f"headers={dict(response.headers)}, "
+                f"body={response.text[:1000]}"
+            )
 
         if need_return_ori_response:
             return response
 
         try:
-            if response.status_code == 200:
-                data = response.json()
-            else:
-                raise DataFetchError(response.text)
+            data = response.json()
         except json.decoder.JSONDecodeError:
-            return response
+            data = None
 
-        if response.status_code == 471 or response.status_code == 461:
-            # someday someone maybe will bypass captcha
-            verify_type = response.headers["Verifytype"]
-            verify_uuid = response.headers["Verifyuuid"]
+        if response.status_code in (471, 461):
+            verify_type = response.headers.get("Verifytype", "")
+            verify_uuid = response.headers.get("Verifyuuid", "")
+            await self._switch_proxy(
+                reason=f"captcha status={response.status_code}, verify_type={verify_type}",
+                mark_current_invalid=True,
+            )
             raise Exception(
                 f"出现验证码，请求失败，Verifytype: {verify_type}，Verifyuuid: {verify_uuid}, Response: {response}"
             )
-        elif data.get("success"):
+
+        if response.status_code != 200:
+            raise DataFetchError(response.text)
+
+        if data is None:
+            return response
+
+        if data.get("success"):
             return data.get("data", data.get("success"))
         elif data.get("code") == ErrorEnum.IP_BLOCK.value.code:
+            await self._switch_proxy(reason=f"ip blocked code={data.get('code')}", mark_current_invalid=True)
             raise IPBlockError(ErrorEnum.IP_BLOCK.value.msg)
         elif data.get("code") == ErrorEnum.SIGN_FAULT.value.code:
             raise SignError(ErrorEnum.SIGN_FAULT.value.msg)
         elif data.get("code") == ErrorEnum.ACCEESS_FREQUENCY_ERROR.value.code:
-            # 访问频次异常, 再随机延时一下
             utils.logger.error(
                 f"[XiaoHongShuClient.request] 访问频次异常，尝试随机延时一下..."
             )
             await asyncio.sleep(utils.random_delay_time(2, 10))
+            await self._switch_proxy(reason=f"access frequency code={data.get('code')}", mark_current_invalid=False)
             raise AccessFrequencyError(ErrorEnum.ACCEESS_FREQUENCY_ERROR.value.msg)
         else:
             raise DataFetchError(data)
@@ -333,7 +406,7 @@ class XhsApiClient(AbstractApiClient):
                 # 前三次删除cookie，直接不带登录态请求网页
                 del copy_headers["Cookie"]
 
-            async with httpx.AsyncClient() as client:
+            async with new_async_client(proxy=self._proxies, trust_env=False) as client:
                 try:
                     reponse = await client.get(req_url, headers=copy_headers)
                     note_dict = self._extractor.extract_note_detail_from_html(
@@ -353,6 +426,7 @@ class XhsApiClient(AbstractApiClient):
                     utils.logger.error(
                         f"[XiaoHongShuClient.get_note_by_id_from_html] 请求笔记详情页失败: {e}"
                     )
+                    await self._switch_proxy(reason=f"html fallback failed retry={current_retry}", mark_current_invalid=False)
                     await asyncio.sleep(random.random())
         return None
 

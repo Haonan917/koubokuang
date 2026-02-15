@@ -112,6 +112,23 @@ def require_state(state: Dict[str, Any], *fields: str) -> None:
 def build_tool_user_message(error: RemixToolException) -> str:
     """生成用于工具失败的用户可读提示"""
     base_message = error.message or t("errors.internalError")
+    # 对大多数工具失败，补充一行可操作的错误详情（如果有），便于定位。
+    # 注意：details 里可能包含 URL；这里只展示最小必要字段，避免过长。
+    if error.error_code in {
+        RemixErrorCode.DOWNLOAD_FAILED,
+        RemixErrorCode.AUDIO_EXTRACT_FAILED,
+        RemixErrorCode.ASR_FAILED,
+        RemixErrorCode.VOICE_CLONE_FAILED,
+        RemixErrorCode.TTS_FAILED,
+        RemixErrorCode.LIPSYNC_FAILED,
+    }:
+        detail = ""
+        if isinstance(error.details, dict):
+            detail = str(error.details.get("detail") or error.details.get("reason") or "").strip()
+        if detail:
+            return f"{base_message}\n\n详细: {detail}"
+        return base_message
+
     if error.error_code not in {
         RemixErrorCode.INVALID_URL,
         RemixErrorCode.CONTENT_NOT_FOUND,

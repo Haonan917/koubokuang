@@ -57,6 +57,7 @@ class User(BaseModel):
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
     status: int = UserStatus.PENDING
+    is_admin: int = 0
     email_verified_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

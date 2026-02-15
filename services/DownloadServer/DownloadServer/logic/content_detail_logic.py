@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlparse
 from logic.base_logic import BaseLogic
 from models.base_model import PlatformEnum
 from models.content_detail import ContentDetailRequest, ContentDetailResponse
+from pkg.crawler_cache import crawler_cache
 from pkg.tools import utils
 
 
@@ -177,4 +178,27 @@ class ContentDetailLogic(BaseLogic):
                 f"[ContentDetailLogic] Extracted content ID from short URL: {content_id}"
             )
 
-        return await self.api_client.get_content_detail(content_id, ori_content_url)
+        # 1) DB cache hit -> return cached payload
+        try:
+            cached = await crawler_cache.get_cached_payload(self.platform, content_id)
+            if cached:
+                utils.logger.info(
+                    f"[ContentDetailLogic] cache hit: platform={self.platform.value}, content_id={content_id}"
+                )
+                # pydantic v1/v2 compat
+                if hasattr(ContentDetailResponse, "model_validate"):
+                    return ContentDetailResponse.model_validate(cached)
+                return ContentDetailResponse.parse_obj(cached)
+        except Exception:
+            cached = None
+
+        # 2) Crawl from platform
+        res = await self.api_client.get_content_detail(content_id, ori_content_url)
+
+        # 3) Store to cache (best-effort)
+        if res:
+            try:
+                await crawler_cache.upsert_payload(self.platform, content_id, ori_content_url, res)
+            except Exception:
+                pass
+        return res

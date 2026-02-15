@@ -59,6 +59,11 @@ def _get_active_db_config() -> Optional[Dict[str, Any]]:
     Returns:
         激活的配置字典，如果没有则返回 None
     """
+    # 如果配置被锁定，直接跳过数据库读取
+    if getattr(settings, "LLM_CONFIG_LOCKED", False):
+        logger.debug("[LLM Config] LLM_CONFIG_LOCKED=True, skipping DB config")
+        return None
+
     try:
         import pymysql
 
@@ -100,6 +105,25 @@ def _get_active_db_config() -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.debug(f"[LLM Config] 数据库配置读取失败: {e}，回退到 .env")
         return None
+
+
+def is_llm_configured() -> bool:
+    """
+    检查 LLM 是否已配置（基于内置/环境配置）
+    """
+    provider = (settings.LLM_PROVIDER or "").lower()
+
+    if provider == "openai":
+        # OpenAI-compatible：OpenRouter 等只要求 key + base_url
+        return bool(settings.OPENAI_API_KEY and settings.OPENAI_BASE_URL)
+    if provider == "anthropic":
+        return bool(settings.ANTHROPIC_API_KEY)
+    if provider == "deepseek":
+        return bool(settings.DEEPSEEK_API_KEY and settings.DEEPSEEK_BASE_URL)
+    if provider == "ollama":
+        return bool(settings.OLLAMA_BASE_URL and settings.OLLAMA_MODEL_NAME)
+
+    return False
 
 
 # ============================================================================

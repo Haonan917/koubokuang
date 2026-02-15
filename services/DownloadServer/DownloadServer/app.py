@@ -10,6 +10,7 @@ from tornado.options import define, options
 import config
 import router
 from context_vars import request_id_var
+from pkg.crawler_cache import crawler_cache
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,9 @@ async def init():
     # 将项目根目录添加到sys.path
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     sys.path.insert(0, project_root)
+
+    # 初始化爬虫结果缓存（MySQL）
+    await crawler_cache.safe_initialize()
 
 
 define(name="port", default=config.APP_PORT, type=int, help="app http listen port")

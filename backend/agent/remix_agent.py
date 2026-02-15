@@ -74,7 +74,7 @@ __all__ = [
 # LLM Model
 # ============================================================================
 
-def get_model():
+def get_model(model_name: Optional[str] = None):
     """
     获取 LLM 模型实例
 
@@ -87,6 +87,7 @@ def get_model():
     from config import settings
     return get_llm(
         temperature=0.3,
+        model_name=model_name,
         enable_thinking=getattr(settings, 'ENABLE_THINKING', False),
     )
 
@@ -95,7 +96,7 @@ def get_model():
 # Agent Factory
 # ============================================================================
 
-def create_remix_agent():
+def create_remix_agent(model_name: Optional[str] = None):
     """
     创建 RemixAgent 实例
 
@@ -106,7 +107,7 @@ def create_remix_agent():
         Compiled LangGraph Agent
     """
     # 获取 LLM
-    model = get_model()
+    model = get_model(model_name=model_name)
 
     # 定义工具列表
     # 简化架构: 只保留数据获取工具

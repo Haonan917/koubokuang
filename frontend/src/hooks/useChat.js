@@ -161,7 +161,7 @@ export function useChat(token, options = {}) {
       const configStatus = await checkLLMConfigStatus();
       if (!configStatus.configured) {
         requestInProgressRef.current = false;
-        handleErrorEvent('尚未配置大模型，请先点击左侧边栏底部的设置按钮，配置并激活一个 LLM。', {
+        handleErrorEvent('尚未配置大模型，请联系管理员配置内置 LLM。', {
           setMessages,
           setStreamingMessage,
           setLoading,

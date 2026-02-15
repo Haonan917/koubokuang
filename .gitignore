@@ -1,0 +1,29 @@
+# Local env/config (keep templates like .env.example in git)
+config/*.env
+config/*.env.*
+config/*.bak*
+config/*.backup*
+
+# Runtime/generated data
+backend/data/assets/
+
+# Python bytecode
+**/__pycache__/
+*.py[cod]
+
+# Python tooling
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node tooling
+node_modules/
+dist/
+build/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+

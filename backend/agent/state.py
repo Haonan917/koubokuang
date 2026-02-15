@@ -219,3 +219,4 @@ class RemixContext:
     preferred_avatar_id: Optional[str] = None
     preferred_avatar_title: Optional[str] = None
     preferred_avatar_url: Optional[str] = None
+    model_name: Optional[str] = None

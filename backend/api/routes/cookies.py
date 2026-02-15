@@ -23,10 +23,16 @@
 """
 from fastapi import APIRouter, HTTPException
 
+from config import settings
 from schemas import CookiesUpdateRequest, CookiesListResponse, CookiesInfo, CookiesDetail
 from services.cookies_service import cookies_service
 
 router = APIRouter()
+
+
+def _ensure_cookies_manageable():
+    if getattr(settings, "COOKIES_MANAGED_BY_ADMIN", False):
+        raise HTTPException(status_code=403, detail="平台 Cookies 已锁定，当前部署不允许用户配置")
 
 
 @router.get("", response_model=CookiesListResponse)
@@ -36,6 +42,7 @@ async def list_cookies():
 
     返回所有已配置的平台 cookies 信息（不含 cookies 明文）。
     """
+    _ensure_cookies_manageable()
     items = await cookies_service.list_all()
     return CookiesListResponse(items=items)
 
@@ -51,6 +58,7 @@ async def get_cookies(platform: str):
     Returns:
         CookiesDetail (含 cookies 明文)
     """
+    _ensure_cookies_manageable()
     detail = await cookies_service.get_detail(platform)
     if not detail:
         raise HTTPException(status_code=404, detail=f"平台 {platform} 未配置 cookies")
@@ -69,6 +77,7 @@ async def set_cookies(platform: str, request: CookiesUpdateRequest):
     Returns:
         操作结果
     """
+    _ensure_cookies_manageable()
     valid_platforms = {"xhs", "dy", "bili", "ks"}
     if platform not in valid_platforms:
         raise HTTPException(
@@ -96,6 +105,7 @@ async def delete_cookies(platform: str):
     Returns:
         操作结果
     """
+    _ensure_cookies_manageable()
     deleted = await cookies_service.delete_cookies(platform)
 
     if not deleted:

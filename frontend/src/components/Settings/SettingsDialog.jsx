@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Cookie, Bot, Settings as SettingsIcon, Palette, Mic, AudioLines, Clapperboard, Camera } from 'lucide-react';
-import CookiesManager from './CookiesManager';
-import LLMConfigManager from './LLMConfigManager';
+import { X, Settings as SettingsIcon, Palette, Mic, AudioLines, Clapperboard, Camera } from 'lucide-react';
 import InsightModeManager from './InsightModeManager';
 import VoiceCloneManager from './VoiceCloneManager';
 import AvatarCloneManager from './AvatarCloneManager';
@@ -17,19 +15,9 @@ import LipsyncManager from './LipsyncManager';
  */
 const getMenuItems = (t) => [
   {
-    key: 'llm',
-    icon: Bot,
-    label: t('llmConfig.title'),
-  },
-  {
     key: 'modes',
     icon: Palette,
     label: t('insightModes.title'),
-  },
-  {
-    key: 'cookies',
-    icon: Cookie,
-    label: t('settings.cookies'),
   },
   {
     key: 'voice_clone',
@@ -63,7 +51,7 @@ const getMenuItems = (t) => [
  */
 function SettingsDialog({ isOpen, onClose }) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState('llm');
+  const [activeTab, setActiveTab] = useState('modes');
 
   const menuItems = getMenuItems(t);
 
@@ -96,12 +84,8 @@ function SettingsDialog({ isOpen, onClose }) {
   // 渲染右侧内容
   const renderContent = () => {
     switch (activeTab) {
-      case 'llm':
-        return <LLMConfigManager />;
       case 'modes':
         return <InsightModeManager />;
-      case 'cookies':
-        return <CookiesManager />;
       case 'voice_clone':
         return <VoiceCloneManager />;
       case 'avatar_clone':

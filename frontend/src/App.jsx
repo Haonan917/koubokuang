@@ -12,6 +12,7 @@ import { useSessionRouter } from './hooks/useSessionRouter';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, useAuth } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
 import ThemeSwitcher from './components/ThemeSwitcher';
+import AdminPage from './components/Admin/AdminPage';
 import {
   LoginPage,
   RegisterPage,
@@ -21,6 +22,31 @@ import {
   VerifyEmailPage,
 } from './components/Auth';
 import { getAccessToken } from './services/auth';
+
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-bg-primary">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+  if (!user) {
+    return <ProtectedRoute>{children}</ProtectedRoute>;
+  }
+  if (user?.is_admin !== 1) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-bg-primary text-text-primary">
+        <div className="max-w-md w-full p-6 bg-bg-secondary border border-border-default rounded-2xl">
+          <div className="text-lg font-semibold">403</div>
+          <div className="text-sm text-text-muted mt-1">需要管理员权限</div>
+        </div>
+      </div>
+    );
+  }
+  return children;
+}
 
 function AppContent() {
   // UI State
@@ -246,6 +272,16 @@ function App() {
             <ProtectedRoute>
               <AppContent />
             </ProtectedRoute>
+          }
+        />
+
+        {/* Admin Console：需要登录且 is_admin=1 */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPage />
+            </AdminRoute>
           }
         />
 

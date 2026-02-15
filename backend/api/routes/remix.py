@@ -34,6 +34,7 @@
 """
 
 import asyncio
+import time
 import uuid
 from typing import Optional
 
@@ -55,6 +56,7 @@ from api.dependencies import get_current_user, get_current_user_optional
 from api.routes.sse_helpers import SegmentCollector, SSEEventBuilder
 from config import settings
 from i18n import t
+from llm_provider import is_llm_configured
 from services.auth_service import User
 from services.title_generator import generate_title
 from utils.error_handlers import (
@@ -62,8 +64,8 @@ from utils.error_handlers import (
     log_agent_error,
     build_sse_error_data,
 )
-from services.llm_config_service import llm_config_service
 from services.media_ai_store import MediaAIStore
+from services.usage_service import usage_service, LLMUsageEvent
 from utils.logger import logger
 
 
@@ -99,6 +101,7 @@ class AnalyzeRequest(BaseModel):
     preferred_avatar_id: Optional[str] = None
     preferred_avatar_title: Optional[str] = None
     preferred_avatar_url: Optional[str] = None
+    model_name: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -110,6 +113,22 @@ class ChatRequest(BaseModel):
     preferred_avatar_id: Optional[str] = None
     preferred_avatar_title: Optional[str] = None
     preferred_avatar_url: Optional[str] = None
+    model_name: Optional[str] = None
+
+
+def resolve_model_name(model_name: Optional[str]) -> Optional[str]:
+    """
+    解析并校验用户选择的模型名称（仅允许配置白名单）
+    """
+    if not model_name:
+        return None
+    allowed = getattr(settings, "LLM_ALLOWED_MODELS", None) or []
+    if not allowed:
+        return model_name
+    if model_name in allowed:
+        return model_name
+    logger.warning(f"Model '{model_name}' not in allowlist, ignoring")
+    return None
 
 
 # ========== 端点实现 ==========
@@ -207,21 +226,26 @@ async def analyze(
             raise HTTPException(status_code=400, detail=f"Mode '{requested_mode}' not found or disabled")
 
     async def event_generator():
+        request_started = time.monotonic()
         builder = SSEEventBuilder(retry_ms=5000)
 
         # ========== LLM 配置检查 ==========
-        active_config = await llm_config_service.get_active_config_name()
-        if not active_config:
+        if not is_llm_configured():
             yield builder.build_with_retry("error", {
                 "code": "LLM_NOT_CONFIGURED",
-                "message": "尚未配置大模型，请先前往设置页面配置并激活一个 LLM。",
+                "message": "尚未配置大模型，请联系管理员配置内置 LLM。",
             })
             yield builder.build("done", {"session_id": session_id, "error": True})
             yield builder.build_done()
             return
 
         # 每次请求创建新的 Agent 实例 (线程安全)
-        agent = create_remix_agent()
+        selected_model = resolve_model_name(request.model_name)
+        agent = create_remix_agent(model_name=selected_model)
+        # 记录本次请求开始时的累计 token（用于计算 delta）
+        start_state = await get_agent_state(agent, session_id)
+        start_in = int((start_state or {}).get("total_input_tokens") or 0)
+        start_out = int((start_state or {}).get("total_output_tokens") or 0)
         processor = StreamEventProcessor()
         collector = SegmentCollector()
         first_event_sent = False
@@ -299,6 +323,7 @@ async def analyze(
             preferred_avatar_id=request.preferred_avatar_id,
             preferred_avatar_title=request.preferred_avatar_title,
             preferred_avatar_url=request.preferred_avatar_url,
+            model_name=selected_model,
         )
 
         # 构建消息和配置
@@ -355,6 +380,29 @@ async def analyze(
 
             # 获取最终状态（在保存消息前，用于添加 content_info 和 transcript 到 segments）
             final_state = await get_agent_state(agent, session_id)
+            end_in = int((final_state or {}).get("total_input_tokens") or 0)
+            end_out = int((final_state or {}).get("total_output_tokens") or 0)
+            delta_in = max(0, end_in - start_in)
+            delta_out = max(0, end_out - start_out)
+            model_for_usage = (
+                selected_model
+                or getattr(settings, "OPENAI_MODEL_NAME", None)
+                or getattr(settings, "OLLAMA_MODEL_NAME", None)
+                or getattr(settings, "DEEPSEEK_MODEL_NAME", None)
+                or "unknown"
+            )
+            await usage_service.record_llm_usage(
+                LLMUsageEvent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    endpoint="/api/v1/remix/analyze",
+                    model=model_for_usage,
+                    input_tokens=delta_in,
+                    output_tokens=delta_out,
+                    latency_ms=int((time.monotonic() - request_started) * 1000),
+                    success=True,
+                )
+            )
 
             # 诊断日志：检查 transcript 是否在 final_state 中
             logger.info(f"Final state transcript: {bool(final_state.get('transcript') if final_state else None)}")
@@ -439,6 +487,27 @@ async def analyze(
             raise  # 重新抛出以确保生成器正确退出
 
         except Exception as e:
+            # 失败也记录一条 usage（用于定位异常消耗/失败率）
+            model_for_usage = (
+                selected_model
+                or getattr(settings, "OPENAI_MODEL_NAME", None)
+                or getattr(settings, "OLLAMA_MODEL_NAME", None)
+                or getattr(settings, "DEEPSEEK_MODEL_NAME", None)
+                or "unknown"
+            )
+            await usage_service.record_llm_usage(
+                LLMUsageEvent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    endpoint="/api/v1/remix/analyze",
+                    model=model_for_usage,
+                    input_tokens=0,
+                    output_tokens=0,
+                    latency_ms=int((time.monotonic() - request_started) * 1000),
+                    success=False,
+                    error=str(e),
+                )
+            )
             # 使用统一错误处理
             error_context = build_agent_error_context(
                 error=e,
@@ -523,6 +592,8 @@ async def chat(
                 or ""
             )
 
+    selected_model = resolve_model_name(request.model_name)
+
     # 创建上下文
     context = RemixContext(
         session_id=session_id,
@@ -533,24 +604,28 @@ async def chat(
         preferred_avatar_id=request.preferred_avatar_id,
         preferred_avatar_title=request.preferred_avatar_title,
         preferred_avatar_url=request.preferred_avatar_url,
+        model_name=selected_model,
     )
 
     async def event_generator():
+        request_started = time.monotonic()
         builder = SSEEventBuilder(retry_ms=5000)
 
         # ========== LLM 配置检查 ==========
-        active_config = await llm_config_service.get_active_config_name()
-        if not active_config:
+        if not is_llm_configured():
             yield builder.build_with_retry("error", {
                 "code": "LLM_NOT_CONFIGURED",
-                "message": "尚未配置大模型，请先前往设置页面配置并激活一个 LLM。",
+                "message": "尚未配置大模型，请联系管理员配置内置 LLM。",
             })
             yield builder.build("done", {"session_id": session_id, "error": True})
             yield builder.build_done()
             return
 
         # 每次请求创建新的 Agent 实例 (线程安全)
-        agent = create_remix_agent()
+        agent = create_remix_agent(model_name=selected_model)
+        start_state = await get_agent_state(agent, session_id)
+        start_in = int((start_state or {}).get("total_input_tokens") or 0)
+        start_out = int((start_state or {}).get("total_output_tokens") or 0)
         processor = StreamEventProcessor()
         collector = SegmentCollector()
         first_event_sent = False
@@ -602,6 +677,29 @@ async def chat(
 
             # 获取最终状态并追加本轮媒体结果，支持前端聊天侧直接播放
             final_state = await get_agent_state(agent, session_id)
+            end_in = int((final_state or {}).get("total_input_tokens") or 0)
+            end_out = int((final_state or {}).get("total_output_tokens") or 0)
+            delta_in = max(0, end_in - start_in)
+            delta_out = max(0, end_out - start_out)
+            model_for_usage = (
+                selected_model
+                or getattr(settings, "OPENAI_MODEL_NAME", None)
+                or getattr(settings, "OLLAMA_MODEL_NAME", None)
+                or getattr(settings, "DEEPSEEK_MODEL_NAME", None)
+                or "unknown"
+            )
+            await usage_service.record_llm_usage(
+                LLMUsageEvent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    endpoint="/api/v1/remix/chat",
+                    model=model_for_usage,
+                    input_tokens=delta_in,
+                    output_tokens=delta_out,
+                    latency_ms=int((time.monotonic() - request_started) * 1000),
+                    success=True,
+                )
+            )
             done_cloned_voice = None
             done_tts_result = None
             done_lipsync_result = None
@@ -669,6 +767,26 @@ async def chat(
             raise  # 重新抛出以确保生成器正确退出
 
         except Exception as e:
+            model_for_usage = (
+                selected_model
+                or getattr(settings, "OPENAI_MODEL_NAME", None)
+                or getattr(settings, "OLLAMA_MODEL_NAME", None)
+                or getattr(settings, "DEEPSEEK_MODEL_NAME", None)
+                or "unknown"
+            )
+            await usage_service.record_llm_usage(
+                LLMUsageEvent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    endpoint="/api/v1/remix/chat",
+                    model=model_for_usage,
+                    input_tokens=0,
+                    output_tokens=0,
+                    latency_ms=int((time.monotonic() - request_started) * 1000),
+                    success=False,
+                    error=str(e),
+                )
+            )
             # 使用统一错误处理
             error_context = build_agent_error_context(
                 error=e,

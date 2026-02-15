@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from api.routes import health, remix, cookies, llm_config, insight_modes, auth, media_ai
+from api.routes import health, remix, cookies, llm_config, insight_modes, auth, media_ai, admin
 from agent.memory import memory_manager
 from i18n import LanguageMiddleware
 from utils.logger import logger, setup_logging_intercept
@@ -65,6 +65,10 @@ async def lifespan(app: FastAPI):
         raise SystemExit(1)
     finally:
         await migration_service.close()
+
+    # Bootstrap（可选）：创建默认管理员账号
+    from services.bootstrap_service import bootstrap_service
+    await bootstrap_service.bootstrap_default_admin()
 
     # 检测 DownloadServer 可用性
     from services.download_server_client import download_server_client, DownloadServerError
@@ -118,6 +122,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# API 使用日志（请求维度）
+from api.middleware.usage_logging import api_usage_middleware
+app.middleware("http")(api_usage_middleware)
+
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
@@ -138,6 +146,7 @@ app.include_router(media_ai.router, prefix="/api/v1/media-ai", tags=["media-ai"]
 app.include_router(cookies.router, prefix="/api/v1/cookies", tags=["cookies"])
 app.include_router(llm_config.router, prefix="/api/v1/llm-config", tags=["llm-config"])
 app.include_router(insight_modes.router, prefix="/api/v1/insight-modes", tags=["insight-modes"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 
 # 挂载静态文件服务
 # 1. 内置静态资源（fonts, logos）- 不被 Docker 挂载覆盖
